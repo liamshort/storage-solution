@@ -23,6 +23,15 @@ module "s3_bucket" {
   restrict_public_buckets = var.bucket_restrict_public_buckets
   tags                    = var.bucket_tags
 
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        kms_master_key_id = var.bucket_kms_master_key_id
+        sse_algorithm     = var.bucket_sse_algorithm
+      }
+    }
+  }
+
   versioning = {
     enabled = var.bucket_versioning
   }
@@ -31,8 +40,11 @@ module "s3_bucket" {
 module "dynamodb_table" {
   source = "terraform-aws-modules/dynamodb-table/aws"
 
-  name     = var.dynamodb_table_name
-  hash_key = "name"
+  name           = var.dynamodb_table_name
+  hash_key       = "name"
+  write_capacity = var.dynamodb_write_capacity
+  read_capacity = var.dynamodb_read_capacity
+  billing_mode = var.dynamodb_billing_mode
 
   attributes = [
     {
