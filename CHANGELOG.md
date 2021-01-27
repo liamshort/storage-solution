@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.1.3
+
+### Added
+
+* Ability to pull all objects to a new empty directory
+* When downloading files from S3, will create a local dir for path if not exists
+
 ## 0.1.2
 
 ### Added
