@@ -110,12 +110,17 @@ def run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path
         Bucket=bucket_name
         )
     if "Contents" in s3_objects:
+        original_storage_path_contents = len(os.listdir(storage_path))
         for s3_object in s3_objects["Contents"]:
-            if s3_object["Key"] not in index_items_list:
+            if (s3_object["Key"] not in index_items_list) or (original_storage_path_contents == 0):
                 path_rel = s3_object["Key"]
                 path_abs = storage_path + path_rel
                 filename = os.path.basename(path_rel)
                 exceptions.append(path_rel)
+                dirname, fname = os.path.split(path_abs)
+                if not os.path.exists(dirname):
+                    os.makedirs(dirname)
+                    
                 get_remote_object(s3_client, bucket_name, path_rel, path_abs)
                 modified_time, modified_within_time, modified_time_formatted = get_object_mod_times(os.path.getmtime(path_abs), frequency)
                 unique_name = modified_time_formatted + filename
@@ -149,8 +154,8 @@ def run_push(storage_path, s3_client, index_table, bucket_name, frequency, index
                         put_remote_object(s3_client, bucket_name, path_abs, path_rel)
                         delete_index_item(index_table, original_name)
                         create_index_item(index_table, unique_name, path_rel, modified_time, "raw")
-                        put_object_count = put_object_count + 1
                         purge_object_count = purge_object_count + 1
+                        put_object_count = put_object_count + 1
                     
             if (unique_name and original_name) not in index_items_json:
                 put_remote_object(s3_client, bucket_name, path_abs, path_rel)
