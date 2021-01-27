@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 0.1.2
+
+### Added
+
+* Count for pull, push, purge
+* Log statements for counts
+* Conditional API calls based on counts
+
 ## 0.1.1
 
 ### Updated

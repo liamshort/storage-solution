@@ -57,58 +57,78 @@ def main(aws_profile, aws_region, bucket_name, table_name, storage_path, frequen
 
     if mode == "purge":
         logger.info(f"Running {mode} mode")
-        run_purge(s3_client, index_items_json, bucket_name, index_table)
+        purge_object_count = run_purge(s3_client, index_items_json, bucket_name, index_table)
+        logger.info(f"{purge_object_count} Deleted")
 
     if mode == "pull":
         logger.info(f"Running {mode} mode")
-        run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path, frequency)
+        exceptions, pull_object_count = run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path, frequency)
+        logger.info(f"{pull_object_count} Downloaded")
 
     if mode == "push":
         logger.info(f"Running {mode} mode")
         exceptions = []
-        run_push(storage_path, s3_client, index_table, bucket_name, frequency, index_items_json, zip_path, exceptions)
+        put_object_count, purge_object_count = run_push(storage_path, s3_client, index_table, bucket_name, frequency, index_items_json, zip_path, exceptions)
+        logger.info(f"{put_object_count} Uploaded")
+        logger.info(f"{purge_object_count} Deleted")
         
     if mode == "sync":
         logger.info(f"Running {mode} mode")
-        exceptions = run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path, frequency)
-        index_items_json = get_index_items_json(index_table)
-        run_push(storage_path, s3_client, index_table, bucket_name, frequency, index_items_json, zip_path, exceptions)
+        exceptions, pull_object_count = run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path, frequency)
+        logger.info(f"{pull_object_count} Downloaded")
+        
+        if pull_object_count != 0:
+            index_items_json = get_index_items_json(index_table)
+            
+        put_object_count, purge_object_count = run_push(storage_path, s3_client, index_table, bucket_name, frequency, index_items_json, zip_path, exceptions)
+        logger.info(f"{put_object_count} Uploaded")
+        logger.info(f"{purge_object_count} Deleted")
 
     logger.info("Run Complete")
 
 
 def run_purge(s3_client, index_items_json, bucket_name, index_table):
+    purge_object_count = 0
+    
     for key, value in index_items_json.items():
         delete_remote_object(s3_client, bucket_name, value["path"])
         delete_index_item(index_table, key)
+        purge_object_count = purge_object_count + 1
+        
+    return purge_object_count
 
 
 def run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path, frequency):
     index_items_list = []
-    exceptions = []   
+    exceptions = []
+    pull_object_count = 0
+    
     for key, value in index_items_json.items():
         index_items_list.append(value["path"])
         
     s3_objects = s3_client.list_objects(
         Bucket=bucket_name
         )
-    
-    for s3_object in s3_objects["Contents"]:
-        if s3_object["Key"] not in index_items_list:
-            path_rel = s3_object["Key"]
-            path_abs = storage_path + path_rel
-            filename = os.path.basename(path_rel)
-            exceptions.append(path_rel)
-            get_remote_object(s3_client, bucket_name, path_rel, path_abs)
-            modified_time, modified_within_time, modified_time_formatted = get_object_mod_times(os.path.getmtime(path_abs), frequency)
-            unique_name = modified_time_formatted + filename
-            create_index_item(index_table, unique_name, path_rel, modified_time, "raw")
+    if "Contents" in s3_objects:
+        for s3_object in s3_objects["Contents"]:
+            if s3_object["Key"] not in index_items_list:
+                path_rel = s3_object["Key"]
+                path_abs = storage_path + path_rel
+                filename = os.path.basename(path_rel)
+                exceptions.append(path_rel)
+                get_remote_object(s3_client, bucket_name, path_rel, path_abs)
+                modified_time, modified_within_time, modified_time_formatted = get_object_mod_times(os.path.getmtime(path_abs), frequency)
+                unique_name = modified_time_formatted + filename
+                create_index_item(index_table, unique_name, path_rel, modified_time, "raw")
+                pull_object_count = pull_object_count + 1
             
-    return exceptions
+    return exceptions, pull_object_count
 
 
 def run_push(storage_path, s3_client, index_table, bucket_name, frequency, index_items_json, zip_path, exceptions):
     local_objects_list = []
+    put_object_count = 0
+    purge_object_count = 0
     
     for (dirpath, dirs, files) in os.walk(storage_path, topdown=True):
         for filename in files:
@@ -129,17 +149,23 @@ def run_push(storage_path, s3_client, index_table, bucket_name, frequency, index
                         put_remote_object(s3_client, bucket_name, path_abs, path_rel)
                         delete_index_item(index_table, original_name)
                         create_index_item(index_table, unique_name, path_rel, modified_time, "raw")
+                        put_object_count = put_object_count + 1
+                        purge_object_count = purge_object_count + 1
                     
             if (unique_name and original_name) not in index_items_json:
                 put_remote_object(s3_client, bucket_name, path_abs, path_rel)
                 create_index_item(index_table, unique_name, path_rel, modified_time, "raw")
+                put_object_count = put_object_count + 1
 
-    index_items_json_updated = get_index_items_json(index_table)
-
-    for key, value in index_items_json_updated.items():
-        if (value["path"] not in local_objects_list) and (value["state"] != "zip"):
-            delete_remote_object(s3_client, bucket_name, value["path"])
-            delete_index_item(index_table, str(key))
+    if put_object_count != 0:  
+        index_items_json_updated = get_index_items_json(index_table)
+        for key, value in index_items_json_updated.items():
+            if (value["path"] not in local_objects_list) and (value["state"] != "zip"):
+                delete_remote_object(s3_client, bucket_name, value["path"])
+                delete_index_item(index_table, str(key))
+                purge_object_count = purge_object_count + 1
+                
+    return put_object_count, purge_object_count
 
     # ZIP FUNCTIONALITY IS WIP
     if zip_path is not None:
