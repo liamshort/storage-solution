@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 0.1.4
+
+### Added
+
+* Pillow to requirements
+* File extension stored in DynamoDB
+* If file is an image, try to retrieve the date it was taken and store in DynamoDB
+
 ## 0.1.3
 
 ### Added
