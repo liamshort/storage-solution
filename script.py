@@ -8,10 +8,14 @@ import json
 from datetime import datetime, timedelta
 import logging
 import zipfile
+from PIL import Image
+from PIL.ExifTags import TAGS
 
 logFormatter = '%(asctime)s - %(message)s'
 logging.basicConfig(format=logFormatter, level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+image_extensions = ["jpeg", "jpg", "png"]
 
 
 def _configure():
@@ -75,12 +79,12 @@ def main(aws_profile, aws_region, bucket_name, table_name, storage_path, frequen
     if mode == "sync":
         logger.info(f"Running {mode} mode")
         exceptions, pull_object_count = run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path, frequency)
-        logger.info(f"{pull_object_count} Downloaded")
         
         if pull_object_count != 0:
             index_items_json = get_index_items_json(index_table)
             
         put_object_count, purge_object_count = run_push(storage_path, s3_client, index_table, bucket_name, frequency, index_items_json, zip_path, exceptions)
+        logger.info(f"{pull_object_count} Downloaded")
         logger.info(f"{put_object_count} Uploaded")
         logger.info(f"{purge_object_count} Deleted")
 
@@ -116,6 +120,7 @@ def run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path
                 path_rel = s3_object["Key"]
                 path_abs = storage_path + path_rel
                 filename = os.path.basename(path_rel)
+                file_extension = os.path.splitext(path_rel)[-1].replace(".","")
                 exceptions.append(path_rel)
                 dirname, fname = os.path.split(path_abs)
                 if not os.path.exists(dirname):
@@ -124,7 +129,7 @@ def run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path
                 get_remote_object(s3_client, bucket_name, path_rel, path_abs)
                 modified_time, modified_within_time, modified_time_formatted = get_object_mod_times(os.path.getmtime(path_abs), frequency)
                 unique_name = modified_time_formatted + filename
-                create_index_item(index_table, unique_name, path_rel, modified_time, "raw")
+                create_index_item(index_table, unique_name, path_rel, modified_time, file_extension, image_date)
                 pull_object_count = pull_object_count + 1
             
     return exceptions, pull_object_count
@@ -140,6 +145,8 @@ def run_push(storage_path, s3_client, index_table, bucket_name, frequency, index
             path_dir = os.path.relpath(dirpath, storage_path)
             path_rel = os.path.join(path_dir, filename).replace("./","")
             path_abs = os.path.join(dirpath, filename)
+            file_extension = os.path.splitext(path_rel)[-1].replace(".","")
+            
             local_objects_list.append(path_rel)
             
             modified_time, modified_within_time, modified_time_formatted = get_object_mod_times(os.path.getmtime(path_abs), frequency)
@@ -150,22 +157,30 @@ def run_push(storage_path, s3_client, index_table, bucket_name, frequency, index
                 if path_rel == value["path"]:
                     original_name = datetime.strftime((datetime.strptime(value["modified_time"], "%Y-%m-%d %H:%M:%S")), "%d%m%Y%H%M%S") + filename
                     if (modified_within_time is True) and (path_rel not in exceptions):
+                        if file_extension in image_extensions:
+                            image_date = get_image_metadata(path_abs)
+                        else:
+                            image_date = None
                         delete_remote_object(s3_client, bucket_name, path_rel)
                         put_remote_object(s3_client, bucket_name, path_abs, path_rel)
                         delete_index_item(index_table, original_name)
-                        create_index_item(index_table, unique_name, path_rel, modified_time, "raw")
+                        create_index_item(index_table, unique_name, path_rel, modified_time, file_extension, image_date)
                         purge_object_count = purge_object_count + 1
                         put_object_count = put_object_count + 1
                     
             if (unique_name and original_name) not in index_items_json:
+                if file_extension in image_extensions:
+                    image_date = get_image_metadata(path_abs)
+                else: 
+                    image_date = None
                 put_remote_object(s3_client, bucket_name, path_abs, path_rel)
-                create_index_item(index_table, unique_name, path_rel, modified_time, "raw")
+                create_index_item(index_table, unique_name, path_rel, modified_time, file_extension, image_date)
                 put_object_count = put_object_count + 1
 
     if put_object_count != 0:  
         index_items_json_updated = get_index_items_json(index_table)
         for key, value in index_items_json_updated.items():
-            if (value["path"] not in local_objects_list) and (value["state"] != "zip"):
+            if (value["path"] not in local_objects_list) and (value["extension"] != "zip"):
                 delete_remote_object(s3_client, bucket_name, value["path"])
                 delete_index_item(index_table, str(key))
                 purge_object_count = purge_object_count + 1
@@ -182,8 +197,25 @@ def run_push(storage_path, s3_client, index_table, bucket_name, frequency, index
                     zip_path, zip_path_abs, zip_path_rel, zip_name = put_zip_object(storage_path, item)
                     unique_zip_name = modified_time_formatted + zip_name
                     put_remote_object(s3_client, bucket_name, zip_path_abs, zip_path_rel)
-                    create_index_item(index_table, unique_zip_name, zip_path_rel, modified_time_formatted, "zip")
+                    create_index_item(index_table, unique_zip_name, zip_path_rel, modified_time_formatted, "zip", image_date)
                     os.remove(zip_path_abs)
+
+
+def get_image_metadata(path_abs):
+    date_captured_formatted = None
+    image = Image.open(path_abs)
+    exifdata = image.getexif()
+    for tag_id in exifdata:
+        tag = TAGS.get(tag_id, tag_id)
+        if tag == "DateTimeOriginal":
+            date_captured_raw = exifdata.get(tag_id)
+            if isinstance(date_captured_raw, bytes):
+                date_captured_raw = date_captured.decode()
+            date_captured = datetime.strptime(date_captured_raw, "%Y:%m:%d %H:%M:%S")
+            date_captured_formatted = date_captured.strftime("%Y-%m-%d %H:%M:%S")
+            break
+    
+    return date_captured_formatted
 
 
 def get_object_mod_times(abs_path, frequency):
@@ -204,7 +236,8 @@ def get_index_items_json(index_table):
         index_items_json[item["name"]] = {
             "path": item["path"],
             "modified_time": item["modified_time"],
-            "state": item["state"]
+            "extension": item["extension"],
+            "image_date": item["image_date"]
         }
 
     return index_items_json
@@ -220,7 +253,7 @@ def delete_index_item(index_table, item):
     )
 
 
-def create_index_item(index_table, item, path, modified_time, state):
+def create_index_item(index_table, item, path, modified_time, extension, image_date):
     logger.info(f"Creating Index - {item}")
     
     index_table.put_item(
@@ -228,7 +261,8 @@ def create_index_item(index_table, item, path, modified_time, state):
             "name": item,
             "path": path,
             "modified_time": str(modified_time),
-            "state": state
+            "extension": extension,
+            "image_date": image_date
         }
     )
 
