@@ -10,6 +10,7 @@ import logging
 import zipfile
 from PIL import Image
 from PIL.ExifTags import TAGS
+import random, string
 
 logFormatter = '%(asctime)s - %(message)s'
 logging.basicConfig(format=logFormatter, level=logging.INFO)
@@ -128,7 +129,11 @@ def run_pull(s3_client, index_table, index_items_json, bucket_name, storage_path
                     
                 get_remote_object(s3_client, bucket_name, path_rel, path_abs)
                 modified_time, modified_within_time, modified_time_formatted = get_object_mod_times(os.path.getmtime(path_abs), frequency)
-                unique_name = modified_time_formatted + filename
+                if file_extension in image_extensions:
+                    image_date = get_image_metadata(path_abs)
+                else:
+                    image_date = None
+                unique_name = ''.join(random.choices(string.ascii_letters + string.digits, k=6)) + filename
                 create_index_item(index_table, unique_name, path_rel, modified_time, file_extension, image_date)
                 pull_object_count = pull_object_count + 1
             
@@ -150,12 +155,12 @@ def run_push(storage_path, s3_client, index_table, bucket_name, frequency, index
             local_objects_list.append(path_rel)
             
             modified_time, modified_within_time, modified_time_formatted = get_object_mod_times(os.path.getmtime(path_abs), frequency)
-            unique_name = modified_time_formatted + filename
+            unique_name = ''.join(random.choices(string.ascii_letters + string.digits, k=6)) + filename
             
             original_name = ""
             for key, value in index_items_json.items():
                 if path_rel == value["path"]:
-                    original_name = datetime.strftime((datetime.strptime(value["modified_time"], "%Y-%m-%d %H:%M:%S")), "%d%m%Y%H%M%S") + filename
+                    original_name = key
                     if (modified_within_time is True) and (path_rel not in exceptions):
                         if file_extension in image_extensions:
                             image_date = get_image_metadata(path_abs)
@@ -177,28 +182,27 @@ def run_push(storage_path, s3_client, index_table, bucket_name, frequency, index
                 create_index_item(index_table, unique_name, path_rel, modified_time, file_extension, image_date)
                 put_object_count = put_object_count + 1
 
-    if put_object_count != 0:  
-        index_items_json_updated = get_index_items_json(index_table)
-        for key, value in index_items_json_updated.items():
-            if (value["path"] not in local_objects_list) and (value["extension"] != "zip"):
-                delete_remote_object(s3_client, bucket_name, value["path"])
-                delete_index_item(index_table, str(key))
-                purge_object_count = purge_object_count + 1
-                
+    index_items_json_updated = get_index_items_json(index_table)
+    for key, value in index_items_json_updated.items():
+        if (value["path"] not in local_objects_list) and (value["path"] not in exceptions):
+            delete_remote_object(s3_client, bucket_name, value["path"])
+            delete_index_item(index_table, str(key))
+            purge_object_count = purge_object_count + 1
+            
     return put_object_count, purge_object_count
 
     # ZIP FUNCTIONALITY IS WIP
-    if zip_path is not None:
-        zip_path_list = zip_path.split(",")
-        for item in zip_path_list:
-            if os.path.exists(storage_path + item):
-                modified_time, modified_within_time, modified_time_formatted = get_object_mod_times(os.path.getmtime(storage_path + item), frequency)
-                if modified_within_time is True:
-                    zip_path, zip_path_abs, zip_path_rel, zip_name = put_zip_object(storage_path, item)
-                    unique_zip_name = modified_time_formatted + zip_name
-                    put_remote_object(s3_client, bucket_name, zip_path_abs, zip_path_rel)
-                    create_index_item(index_table, unique_zip_name, zip_path_rel, modified_time_formatted, "zip", image_date)
-                    os.remove(zip_path_abs)
+    # if zip_path is not None:
+    #     zip_path_list = zip_path.split(",")
+    #     for item in zip_path_list:
+    #         if os.path.exists(storage_path + item):
+    #             modified_time, modified_within_time, modified_time_formatted = get_object_mod_times(os.path.getmtime(storage_path + item), frequency)
+    #             if modified_within_time is True:
+    #                 zip_path, zip_path_abs, zip_path_rel, zip_name = put_zip_object(storage_path, item)
+    #                 unique_zip_name = modified_time_formatted + zip_name
+    #                 put_remote_object(s3_client, bucket_name, zip_path_abs, zip_path_rel)
+    #                 create_index_item(index_table, unique_zip_name, zip_path_rel, modified_time_formatted, "zip", image_date)
+    #                 os.remove(zip_path_abs)
 
 
 def get_image_metadata(path_abs):
@@ -212,7 +216,7 @@ def get_image_metadata(path_abs):
             if isinstance(date_captured_raw, bytes):
                 date_captured_raw = date_captured.decode()
             date_captured = datetime.strptime(date_captured_raw, "%Y:%m:%d %H:%M:%S")
-            date_captured_formatted = date_captured.strftime("%Y-%m-%d %H:%M:%S")
+            date_captured_formatted = date_captured.strftime("%Y-%m-%d")
             break
     
     return date_captured_formatted

@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.2.0
+
+### Added
+
+* Cloudwatch Event Rule to trigger Lambda function daily
+* Lambda function that checks for any photos from that day on previous years and sends to Slack
+
 ## 0.1.4
 
 ### Added

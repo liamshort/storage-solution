@@ -89,3 +89,92 @@ variable "dynamodb_tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "deploy_lambda" {
+  description = "Should the Lambda with Cloudwatch Events Rule be deployed"
+  type        = bool
+  default     = false
+}
+
+variable "lambda_function_name" {
+  description = "Unique name for Lambda Function"
+  type        = string
+}
+
+variable "lambda_description" {
+  description = "Description for Lambda Function"
+  type        = string
+  default     = "Parse DynamoDB to get todays pictures and send to SNS"
+}
+
+variable "lambda_handler" {
+  description = "Lambda Function entrypoint for code"
+  type        = string
+  default     = "parse_dynamodb.lambda_handler"
+}
+
+variable "lambda_runtime" {
+  description = "Lambda Function runtime"
+  type        = string
+  default     = "python3.6"
+}
+
+variable "lambda_timeout" {
+  description = "The amount of time the Lambda Function has to run in seconds"
+  type        = string
+  default     = 300
+}
+
+variable "lambda_years_back" {
+  description = "Number of years back the Lambda Function will check for in DynamoDB"
+  type        = number
+  default     = 10
+}
+
+variable "lambda_tags" {
+  description = "A map of tags to add to Lambda Function"
+  type        = map(string)
+  default     = {}
+}
+
+variable "cloudwatch_event_rule_name" {
+  description = "The name of the Cloudwatch Event Rule"
+  type        = string
+  default     = "invoke-storage-solution-lambda"
+}
+
+variable "cloudwatch_event_rule_description" {
+  description = "Description for the Cloudwatch Event Rule"
+  type        = string
+  default     = "Daily invocation of Storage Solution Lambda"
+}
+
+variable "cloudwatch_event_rule_expression" {
+  description = "Cron expression for Cloudwatch Event Rule, Lambda Function invoked at this time"
+  type        = string
+  default     = "cron(0 9 * * ? *)"
+}
+
+variable "iam_role_name" {
+  description = "Name of the Lambda Function IAM Role"
+  type        = string
+  default     = "storage-solution-role"
+}
+
+variable "slack_webhook" {
+  description = "Webhook used by Lambda Function to forward messages to Slack"
+  type        = string
+  default     = ""
+}
+
+variable "slack_channel" {
+  description = "Name of the Slack channel that Lambda Function forwards messages to"
+  type        = string
+  default     = "storage-solution"
+}
+
+variable "presigned_url_expiration" {
+  description = "Expiration time of presigned URLs"
+  type        = string
+  default     = 3600
+}

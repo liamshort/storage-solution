@@ -2,7 +2,7 @@
 
 ## Overview
 
-This tool allows users Linux users to synchronise a local directory with an AWS S3 Bucket, providing a relatively cheap alternative to Cloud Storage Services such as OneDrive, DropBox or GoogleDrive when storing low volumes of data.
+This tool allows users Linux users to synchronise a local directory with an AWS S3 Bucket, providing a relatively cheap alternative to Cloud Storage Services such as OneDrive, DropBox or GoogleDrive when storing low volumes of data. Allows users to backup files to the cloud and manage them from multiple PCs. Option for users to get notified via Slack of Photos taken that day on previous years.
 
 ## Prerequisites
 
@@ -12,6 +12,8 @@ This tool allows users Linux users to synchronise a local directory with an AWS 
 * AWS Account
     * S3 Bucket
     * DynamoDB Table
+    * Lambda Function
+    * CloudWatch Events Rule
 * AWS Credentials configured for workstation
 
 ## AWS Infrastructure
@@ -20,13 +22,14 @@ The resources in AWS consist of the following:
 
 * S3 Bucket used to store objects remotely.
 * DynamoDB table used as an index to reflect the files stored both locally and in the S3 Bucket. Items within the Table have the following attributes:
-
     Attribute | Description
     | :--- | :--- |
     name | Original name of the file (with extension), prefixed with the formatted modified time
     path | The key for the file in S3 Bucket, which is also the relative path of the local storage directory
     modified_time | The time the file was modified
     state | Is the file raw (original state) or zip (compressed)
+* (optional) Lambda Function to check DynamoDB index for photos on this day
+* (optional) Cloudwatch Events Rule to invoke 
 
 ### Terraform deploy steps
 
