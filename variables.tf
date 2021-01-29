@@ -161,20 +161,14 @@ variable "iam_role_name" {
   default     = "storage-solution-role"
 }
 
-variable "slack_webhook" {
-  description = "Webhook used by Lambda Function to forward messages to Slack"
-  type        = string
-  default     = ""
-}
-
-variable "slack_channel" {
-  description = "Name of the Slack channel that Lambda Function forwards messages to"
-  type        = string
-  default     = "daily-pictures"
-}
-
 variable "presigned_url_expiration" {
   description = "Expiration time of presigned URLs"
   type        = string
   default     = 3600
+}
+
+variable "sns_topic_name" {
+  description = "Name of the SNS Topic"
+  type        = string
+  default     = "storage-solution"
 }

@@ -12,6 +12,7 @@ def lambda_handler(event, context):
     
     s3_client = boto3.client("s3")
     dynamodb_client = session.resource("dynamodb")
+    sns_client = session.client("sns")
 
     index_table = dynamodb_client.Table(os.environ["table_name"])
     response = index_table.scan()
@@ -28,35 +29,25 @@ def lambda_handler(event, context):
         years_ago_today = (datetime.now() - relativedelta(years=int(this_year))).strftime("%Y-%m-%d")
         years.append(years_ago_today)
     
+    presigned_url_json = {}
     for key, value in index_items_json.items():
         if str(value["image_date"]) in str(years):
             presigned_url = s3_client.generate_presigned_url(
                 'get_object', 
-                Params={
+                Params = {
                     'Bucket': os.environ["s3_bucket"], 
                     'Key': value["path"]
                 }, 
-                ExpiresIn=os.environ["presigned_url_expiration"], 
-                HttpMethod=None
+                ExpiresIn = os.environ["presigned_url_expiration"], 
+                HttpMethod = None
             )
             
-            message = create_slack_message(presigned_url, value["image_date"])
-            
-            requests.post(
-                os.environ["slack_webhook"], data= json.dumps(message),
-                headers={"Content-Type": "application/json"},
-            )
-
-
-def create_slack_message(presigned_url, image_date):
-    message = {
-        "icon_url": "https://github.com/liamshort/assets/blob/master/images/cloud_black.png?raw=true",
-        "username": "Storage-Solution",
-        "channel": os.environ["slack_channel"],
-        "attachments": [{
-            "title": image_date,
-            "image_url": presigned_url
-            }
-        ]}
-    
-    return(message)
+            presigned_url_json[key] = {"url": presigned_url}
+        
+    if presigned_url_json != {}:
+        sns_client.publish(
+            TopicArn = os.environ["sns_topic_arn"],
+            Message = json.dumps({"default": str(presigned_url_json)}),
+            Subject = "Daily Pic - " + str(datetime.now().strftime("%Y-%m-%d")),
+            MessageStructure = "json"
+        )

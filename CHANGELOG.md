@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 0.3.0
+
+### Removed
+
+* Slack functionality
+
+### Added
+
+* Creates optional SNS Topic
+* Lambda function will forward to an SNS Topic
+
 ## 0.2.2
 
 ### Fixed
