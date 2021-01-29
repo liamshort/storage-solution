@@ -103,6 +103,13 @@ module "lambda_function" {
     }
   }
 
+  allowed_triggers = {
+    OneRule = {
+      principal  = "events.amazonaws.com"
+      source_arn = "arn:aws:events:${var.region}:${data.aws_caller_identity.current.account_id}:rule/${var.cloudwatch_event_rule_name}"
+    }
+  }
+
   source_path = "lambda_code/parse_dynamodb.py"
 
   store_on_s3 = true

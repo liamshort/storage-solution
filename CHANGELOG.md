@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.2.1
+
+### Fixed
+
+* Fixed permissions to allow Cloudwatch Events Rule to invoke Lambda Function
+
 ## 0.2.0
 
 ### Added
