@@ -152,7 +152,7 @@ variable "cloudwatch_event_rule_description" {
 variable "cloudwatch_event_rule_expression" {
   description = "Cron expression for Cloudwatch Event Rule, Lambda Function invoked at this time"
   type        = string
-  default     = "cron(0 9 * * ? *)"
+  default     = "cron(* 9 * * ? *)"
 }
 
 variable "iam_role_name" {
@@ -170,7 +170,7 @@ variable "slack_webhook" {
 variable "slack_channel" {
   description = "Name of the Slack channel that Lambda Function forwards messages to"
   type        = string
-  default     = "storage-solution"
+  default     = "daily-pictures"
 }
 
 variable "presigned_url_expiration" {
