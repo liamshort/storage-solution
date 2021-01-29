@@ -12,6 +12,13 @@ provider "aws" {
   region = var.region
 }
 
+locals {
+  dynamodb_table_arn        = "arn:aws:dynamodb:eu-west-2:${data.aws_caller_identity.current.account_id}:table/${var.dynamodb_table_name}"
+  s3_bucket_arn             = "arn:aws:s3:::${var.bucket_name}/*"
+  sns_topic_arn             = "arn:aws:sns:${var.region}:${data.aws_caller_identity.current.account_id}:${var.sns_topic_name}"
+  cloudwatch_event_rule_arn = "arn:aws:events:${var.region}:${data.aws_caller_identity.current.account_id}:rule/${var.cloudwatch_event_rule_name}"
+}
+
 data "aws_caller_identity" "current" {}
 
 ################################################################
@@ -72,8 +79,7 @@ module "dynamodb_table" {
 
 module "lambda_function" {
   source = "terraform-aws-modules/lambda/aws"
-
-  count = var.deploy_lambda ? 1 : 0
+  count  = var.deploy_lambda ? 1 : 0
 
   function_name            = var.lambda_function_name
   description              = var.lambda_description
@@ -86,11 +92,11 @@ module "lambda_function" {
   attach_policy_statements = true
   policy_statements = {
     get_dynamodb = {
-      effect    = "Allow",
-      actions   = [
+      effect = "Allow",
+      actions = [
         "dynamodb:Scan"
       ],
-      resources = ["arn:aws:dynamodb:eu-west-2:${data.aws_caller_identity.current.account_id}:table/${var.dynamodb_table_name}"]
+      resources = [local.dynamodb_table_arn]
     },
     s3_read = {
       effect = "Allow",
@@ -99,14 +105,21 @@ module "lambda_function" {
         "s3:GetObject",
         "s3:ListBucket"
       ],
-      resources = ["arn:aws:s3:::${var.bucket_name}/*"]
+      resources = [local.s3_bucket_arn]
+    },
+    sns_publish = {
+      effect = "Allow",
+      actions = [
+        "sns:Publish"
+      ],
+      resources = [local.sns_topic_arn]
     }
   }
 
   allowed_triggers = {
     OneRule = {
       principal  = "events.amazonaws.com"
-      source_arn = "arn:aws:events:${var.region}:${data.aws_caller_identity.current.account_id}:rule/${var.cloudwatch_event_rule_name}"
+      source_arn = local.cloudwatch_event_rule_arn
     }
   }
 
@@ -120,9 +133,8 @@ module "lambda_function" {
     s3_bucket                = module.s3_bucket.this_s3_bucket_id
     table_name               = module.dynamodb_table.this_dynamodb_table_id
     years_back               = var.lambda_years_back
-    slack_webhook            = var.slack_webhook
-    slack_channel            = var.slack_channel
     presigned_url_expiration = var.presigned_url_expiration
+    sns_topic_arn            = local.sns_topic_arn
   }
 
   tags = var.lambda_tags
@@ -151,4 +163,15 @@ resource "aws_cloudwatch_event_target" "this" {
   rule      = aws_cloudwatch_event_rule.this[0].name
   target_id = "SendToLambda"
   arn       = module.lambda_function[0].this_lambda_function_arn
+}
+
+################################################################
+## SNS ENDPOINT
+################################################################
+
+module "sns_topic" {
+  source = "terraform-aws-modules/sns/aws"
+  count  = var.deploy_lambda ? 1 : 0
+
+  name = var.sns_topic_name
 }
