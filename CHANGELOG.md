@@ -1,10 +1,20 @@
 # CHANGELOG
 
+## 0.2.2
+
+### Fixed
+
+* Default Cron expression for Cloudwatch Event Rule
+
+### Updated
+
+* Terraform command in README
+
 ## 0.2.1
 
 ### Fixed
 
-* Fixed permissions to allow Cloudwatch Events Rule to invoke Lambda Function
+* Permissions to allow Cloudwatch Events Rule to invoke Lambda Function
 
 ## 0.2.0
 
