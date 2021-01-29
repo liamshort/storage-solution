@@ -35,7 +35,7 @@ The resources in AWS consist of the following:
 
 * In `backend.tf`, define values to be used for the Terraform Backend
 * Run `$ terraform init`
-* Run `$ terraform plan --var "region=MY_REGION" --var "bucket_name=MY_BUCKET_NAME" --var "dynamodb_table_name=MY_TABLE_NAME"` -out=out.tfplan
+* Run `$ terraform plan --var "region=MY_REGION" --var "bucket_name=MY_BUCKET_NAME" --var "dynamodb_table_name=MY_TABLE_NAME" -var "slack_webhook=MY_SLACK_WEBHOOK" -out=out.tfplan`
 * Run `$ terraform apply out.tfplan`
 
 ## Script Usage
